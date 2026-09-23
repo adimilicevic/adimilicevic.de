@@ -1,171 +1,86 @@
 (() => {
-  const stage = document.getElementById("pongStage");
-  const canvas = document.getElementById("pongCanvas");
-  const ctx = canvas.getContext("2d");
-  const scoreEl = document.getElementById("score");
-  const message = document.getElementById("pongMessage");
-  const restart = document.getElementById("restart");
-  const year = document.getElementById("year");
+  const world=document.getElementById("world"), ctx=world.getContext("2d");
+  const dpr=Math.min(2,devicePixelRatio||1);
+  let W=innerWidth,H=innerHeight,scrollY=0,stars=[],t=0;
 
-  year.textContent = new Date().getFullYear();
-
-  let W = 800, H = 440, dpr = 1;
-  let animationFrame = 0;
-  let last = 0;
-  let started = false;
-  let gameOver = false;
-  const state = {
-    player: 0.5,
-    cpu: 0.5,
-    ballX: 0.5,
-    ballY: 0.5,
-    vx: 0.48,
-    vy: 0.18,
-    playerScore: 0,
-    cpuScore: 0
-  };
-
-  function resize() {
-    const rect = stage.getBoundingClientRect();
-    W = Math.max(320, rect.width);
-    H = Math.max(210, rect.height);
-    dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = Math.round(W * dpr);
-    canvas.height = Math.round(H * dpr);
-    canvas.style.width = `${W}px`;
-    canvas.style.height = `${H}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    draw();
+  function resize(){
+    W=innerWidth;H=innerHeight;
+    world.width=W*dpr;world.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    stars=Array.from({length:Math.max(65,Math.floor(W*H/14500))},()=>({
+      x:Math.random()*W,y:Math.random()*H*.58,r:Math.random()*1.2+.25,a:Math.random()*.7+.15,s:Math.random()*.0007+.00025
+    }));
   }
+  function drawWorld(){
+    t+=.008;ctx.clearRect(0,0,W,H);
+    const scroll=scrollY/(Math.max(1,document.body.scrollHeight-H));
+    const horizon=H*(.62-scroll*.16);
+    const g=ctx.createRadialGradient(W*.53,horizon*.48,0,W*.53,horizon*.48,Math.max(W,H)*.7);
+    g.addColorStop(0,"rgba(32,75,91,.16)");g.addColorStop(.5,"rgba(7,28,42,.04)");g.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
 
-  function updateScore() {
-    scoreEl.textContent = `${state.playerScore} — ${state.cpuScore}`;
-  }
-
-  function resetBall(direction) {
-    state.ballX = 0.5;
-    state.ballY = 0.5;
-    state.vx = 0.48 * direction;
-    state.vy = (Math.random() * 0.34) - 0.17;
-  }
-
-  function restartGame() {
-    state.playerScore = 0;
-    state.cpuScore = 0;
-    state.player = 0.5;
-    state.cpu = 0.5;
-    started = false;
-    gameOver = false;
-    message.textContent = "MOVE TO PLAY";
-    message.style.opacity = "1";
-    resetBall(Math.random() < 0.5 ? 1 : -1);
-    updateScore();
-  }
-
-  function movePlayer(clientY) {
-    const rect = stage.getBoundingClientRect();
-    state.player = Math.max(0.12, Math.min(0.88, (clientY - rect.top) / rect.height));
-    if (!started && !gameOver) {
-      started = true;
-      message.style.opacity = "0";
-    }
-  }
-
-  stage.addEventListener("pointermove", e => movePlayer(e.clientY));
-  stage.addEventListener("pointerdown", e => movePlayer(e.clientY));
-  restart.addEventListener("click", restartGame);
-  window.addEventListener("resize", resize);
-
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = "#101010";
-
-    for (let y = 12; y < H; y += 25) {
-      ctx.fillRect(W / 2 - 1, y, 2, 12);
+    const starOpacity=Math.max(0,1-scroll*1.5);
+    for(const s of stars){
+      const a=s.a*(.65+.35*Math.sin(t*s.s*900+s.x));
+      ctx.fillStyle=`rgba(230,239,236,${a*starOpacity})`;
+      ctx.beginPath();ctx.arc(s.x,(s.y-scroll*H*.08),s.r,0,Math.PI*2);ctx.fill();
     }
 
-    const paddleW = 7;
-    const paddleH = Math.max(42, H * 0.18);
-    const ballSize = 7;
-
-    ctx.fillRect(24, state.player * H - paddleH / 2, paddleW, paddleH);
-    ctx.fillRect(W - 31, state.cpu * H - paddleH / 2, paddleW, paddleH);
-
-    ctx.beginPath();
-    ctx.arc(state.ballX * W, state.ballY * H, ballSize / 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  function tick(timestamp) {
-    if (!last) last = timestamp;
-    const dt = Math.min(0.032, (timestamp - last) / 1000);
-    last = timestamp;
-
-    if (started && !gameOver) {
-      state.ballX += state.vx * dt;
-      state.ballY += state.vy * dt;
-
-      if (state.ballY < 0.02) {
-        state.ballY = 0.02;
-        state.vy = Math.abs(state.vy);
+    const waterTop=H*(.67-scroll*.10);
+    const waves=9;
+    for(let i=0;i<waves;i++){
+      const y=waterTop+i*H*.038;
+      ctx.beginPath();ctx.moveTo(0,y);
+      for(let x=0;x<=W;x+=18){
+        const yy=y+Math.sin(x*.008+i+t*.65)*2.2+Math.sin(x*.021-t*.35)*1.1;
+        ctx.lineTo(x,yy);
       }
-      if (state.ballY > 0.98) {
-        state.ballY = 0.98;
-        state.vy = -Math.abs(state.vy);
-      }
-
-      const cpuTarget = state.ballY + state.vy * 0.12;
-      state.cpu += (cpuTarget - state.cpu) * Math.min(1, dt * 4.0);
-
-      const paddleH = Math.max(42, H * 0.18);
-      const pTop = state.player - paddleH / (2 * H);
-      const pBottom = state.player + paddleH / (2 * H);
-
-      if (state.ballX < 0.047 && state.ballX > 0.035 &&
-          state.ballY > pTop && state.ballY < pBottom) {
-        state.ballX = 0.047;
-        state.vx = Math.abs(state.vx) * 1.035;
-        state.vy += (state.ballY - state.player) * 0.55;
-      }
-
-      const cTop = state.cpu - paddleH / (2 * H);
-      const cBottom = state.cpu + paddleH / (2 * H);
-
-      if (state.ballX > 0.953 && state.ballX < 0.965 &&
-          state.ballY > cTop && state.ballY < cBottom) {
-        state.ballX = 0.953;
-        state.vx = -Math.abs(state.vx) * 1.035;
-        state.vy += (state.ballY - state.cpu) * 0.55;
-      }
-
-      if (state.ballX < -0.02) {
-        state.cpuScore++;
-        updateScore();
-        if (state.cpuScore >= 7) endGame("CPU WINS");
-        else resetBall(1);
-      }
-
-      if (state.ballX > 1.02) {
-        state.playerScore++;
-        updateScore();
-        if (state.playerScore >= 7) endGame("YOU WIN");
-        else resetBall(-1);
-      }
+      ctx.strokeStyle=`rgba(105,165,171,${.09-i*.006})`;
+      ctx.lineWidth=1;ctx.stroke();
     }
-
-    draw();
-    animationFrame = requestAnimationFrame(tick);
+    requestAnimationFrame(drawWorld);
   }
+  addEventListener("resize",resize);addEventListener("scroll",()=>scrollY=scrollY||window.scrollY,{passive:true});
+  scrollY=window.scrollY;resize();drawWorld();
 
-  function endGame(text) {
-    gameOver = true;
-    message.textContent = `${text} · RESTART`;
-    message.style.opacity = "1";
+  const court=document.getElementById("court"),canvas=document.getElementById("pong"),pctx=canvas.getContext("2d");
+  const score=document.getElementById("score"),start=document.getElementById("start"),restart=document.getElementById("restart");
+  let cw=800,ch=430,cdpr=1,last=0,raf=0,started=false,over=false;
+  const s={p:.5,c:.5,x:.5,y:.5,vx:.5,vy:.18,ps:0,cs:0};
+
+  function resizeGame(){
+    const r=court.getBoundingClientRect();cw=Math.max(320,r.width);ch=Math.max(200,r.height);
+    cdpr=Math.min(2,devicePixelRatio||1);canvas.width=cw*cdpr;canvas.height=ch*cdpr;
+    pctx.setTransform(cdpr,0,0,cdpr,0,0);draw();
   }
+  function resetBall(dir){s.x=.5;s.y=.5;s.vx=.5*dir;s.vy=Math.random()*.32-.16}
+  function resetGame(){s.p=.5;s.c=.5;s.ps=0;s.cs=0;started=false;over=false;start.textContent="MOVE TO PLAY";start.style.opacity=1;resetBall(Math.random()<.5?1:-1);score.textContent="0 — 0"}
+  function move(y){const r=court.getBoundingClientRect();s.p=Math.max(.12,Math.min(.88,(y-r.top)/r.height));if(!started&&!over){started=true;start.style.opacity=0}}
+  court.addEventListener("pointermove",e=>move(e.clientY));court.addEventListener("pointerdown",e=>move(e.clientY));restart.addEventListener("click",resetGame);addEventListener("resize",resizeGame);
 
-  resize();
-  restartGame();
-  animationFrame = requestAnimationFrame(tick);
-
-  window.addEventListener("beforeunload", () => cancelAnimationFrame(animationFrame));
+  function draw(){
+    pctx.clearRect(0,0,cw,ch);pctx.fillStyle="#e9f0ec";
+    for(let y=10;y<ch;y+=24)pctx.fillRect(cw/2-1,y,2,11);
+    const ph=Math.max(40,ch*.18);
+    pctx.fillRect(22,s.p*ch-ph/2,6,ph);pctx.fillRect(cw-28,s.c*ch-ph/2,6,ph);
+    pctx.beginPath();pctx.arc(s.x*cw,s.y*ch,3.5,0,Math.PI*2);pctx.fill();
+  }
+  function end(text){over=true;start.textContent=text+" · RESTART";start.style.opacity=1}
+  function tick(now){
+    if(!last)last=now;const dt=Math.min(.032,(now-last)/1000);last=now;
+    if(started&&!over){
+      s.x+=s.vx*dt;s.y+=s.vy*dt;
+      if(s.y<.02){s.y=.02;s.vy=Math.abs(s.vy)}if(s.y>.98){s.y=.98;s.vy=-Math.abs(s.vy)}
+      s.c+=(s.y-s.c)*Math.min(1,dt*4);
+      const ph=Math.max(40,ch*.18),pt=s.p-ph/(2*ch),pb=s.p+ph/(2*ch),ct=s.c-ph/(2*ch),cb=s.c+ph/(2*ch);
+      if(s.x<.05&&s.x>.035&&s.y>pt&&s.y<pb){s.x=.05;s.vx=Math.abs(s.vx)*1.035;s.vy+=(s.y-s.p)*.55}
+      if(s.x>.95&&s.x<.965&&s.y>ct&&s.y<cb){s.x=.95;s.vx=-Math.abs(s.vx)*1.035;s.vy+=(s.y-s.c)*.55}
+      if(s.x<-.02){s.cs++;score.textContent=`${s.ps} — ${s.cs}`;s.cs>=7?end("CPU WINS"):resetBall(1)}
+      if(s.x>1.02){s.ps++;score.textContent=`${s.ps} — ${s.cs}`;s.ps>=7?end("YOU WIN"):resetBall(-1)}
+    }
+    draw();raf=requestAnimationFrame(tick)
+  }
+  resizeGame();resetGame();raf=requestAnimationFrame(tick);
+  addEventListener("beforeunload",()=>cancelAnimationFrame(raf));
+  document.getElementById("year").textContent=new Date().getFullYear();
 })();
